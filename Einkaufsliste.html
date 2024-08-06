@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Einkaufsliste</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin: 0 0 20px 0;
+        }
+        input[type="text"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .button-group {
+            display: flex;
+            justify-content: space-between;
+        }
+        button {
+            width: 48%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #28a745;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        .delete-all-btn {
+            background-color: #dc3545;
+        }
+        .export-btn {
+            background-color: #007bff;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+        li {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+        li:hover {
+            background-color: #f1f1f1;
+        }
+        li.completed label {
+            text-decoration: line-through;
+            color: #777;
+        }
+        .delete-btn {
+            background-color: transparent;
+            color: #dc3545;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            margin-left: auto;
+        }
+        .delete-btn:hover {
+            color: #c82333;
+        }
+        label {
+            flex: 1;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Einkaufsliste</h1>
+        <input type="text" id="itemInput" placeholder="Neues Element hinzufügen">
+        <div class="button-group">
+            <button onclick="addItem()">Hinzufügen</button>
+            <button class="delete-all-btn" onclick="clearAll()">Alles löschen</button>
+        </div>
+        <button class="export-btn" onclick="exportToExcel()">Als Excel exportieren</button>
+        <ul id="shoppingList"></ul>
+    </div>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(registration => {
+                    console.log('Service Worker registered with scope:', registration.scope);
+                })
+                .catch(error => {
+                    console.log('Service Worker registration failed:', error);
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', loadItems);
+
+        function addItem() {
+            const input = document.getElementById('itemInput');
+            const itemText = input.value.trim();
+            if (itemText !== "") {
+                const li = createListItem(itemText, false);
+                document.getElementById('shoppingList').prepend(li);
+                saveItems();
+                input.value = '';
+            }
+        }
+
+        function createListItem(text, completed) {
+            const li = document.createElement('li');
+            if (completed) {
+                li.classList.add('completed');
+            }
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = completed;
+            checkbox.onclick = function() {
+                if (this.checked) {
+                    li.classList.add('completed');
+                    document.getElementById('shoppingList').appendChild(li);
+                } else {
+                    li.classList.remove('completed');
+                    document.getElementById('shoppingList').prepend(li);
+                }
+                saveItems();
+            };
+
+            const label = document.createElement('label');
+            label.textContent = text;
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.innerHTML = '&times;';
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.onclick = function() {
+                li.remove();
+                saveItems();
+            };
+
+            li.appendChild(checkbox);
+            li.appendChild(label);
+            li.appendChild(deleteBtn);
+
+            return li;
+        }
+
+        function saveItems() {
+            const items = [];
+            document.querySelectorAll('#shoppingList li').forEach(li => {
+                const text = li.querySelector('label').textContent;
+                const completed = li.querySelector('input[type="checkbox"]').checked;
+                items.push({ text, completed });
+            });
+            localStorage.setItem('shoppingList', JSON.stringify(items));
+        }
+
+        function loadItems() {
+            const items = JSON.parse(localStorage.getItem('shoppingList')) || [];
+            items.forEach(item => {
+                const li = createListItem(item.text, item.completed);
+                if (item.completed) {
+                    document.getElementById('shoppingList').appendChild(li);
+                } else {
+                    document.getElementById('shoppingList').prepend(li);
+                }
+            });
+        }
+
+        function clearAll() {
+            localStorage.removeItem('shoppingList');
+            document.getElementById('shoppingList').innerHTML = '';
+        }
+
+        function exportToExcel() {
+            const items = JSON.parse(localStorage.getItem('shoppingList')) || [];
+            let csvContent = "data:text/csv;charset=utf-8,Item,Completed\n";
+            items.forEach(item => {
+                csvContent += `${item.text},${item.completed ? "Ja" : "Nein"}\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "einkaufsliste.csv");
+            document.body.appendChild(link);
+
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
